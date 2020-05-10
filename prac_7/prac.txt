@@ -1,0 +1,14 @@
+1. 
+What is a signal? 
+A signal is a kind of message
+How is it handled?
+
+Where do signals come from?
+Signals can come from the kernal when a process does something wrong.
+
+How multiple signals are handled? 
+The kernal passes the signal number to the handler so that the handler knows the cause of the problem. This is done with the signal() function or the sigaction() function. Have to be decide wether to block other signals or not in order to protect data. Need to determine crtical sections of code.
+
+
+6. How does a process send a signal to another process? 
+A process may communicate with another process via the kill system call.
