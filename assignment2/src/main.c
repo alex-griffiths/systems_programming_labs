@@ -4,30 +4,72 @@
 #include <unistd.h>
 #include <time.h>
 #include <string.h>
+#include <ctype.h>
 
 #define AVERAGE    0
 #define WORD_COUNT 1
 #define EDIT       2
 
-void get_marks();
+#include "marks.h"
+#include "wc.h"
+#include "find_and_replace.h"
+
 void parent(int ids[], int id_size);
-void call_wc(char *filename);
-void edit_file(char *filename, char *needle);
 
 int main(int argsc, char **argsv) {
+	int new_pid;
+	int i = 0;
+	int child_ids[3];
+	
 	char *file_1, *file_2;
-	if (argsc < 3) {
-		perror("Missing required arguments.\r\n");
+	if (argsc < 3) { // Check that we have the minimum number of arguments.
+		printf("\033[1;31m[ ERROR ]\033[0m :: Missing required arguments\r\n");
+		return 1;
 	} else {
+		if (argsc > 3) { // Show a warning to the user if too many arguments were supplied.
+			printf("\033[1;33m[ WARNING ]\033[0m :: Extra arguments have been supplied. Ignoring the following arguments:\r\n");
+			int z = 3;
+			while (z < argsc) {
+				printf("Argument %d: %s\r\n\r\n", z, argsv[z]);
+				z++;
+			}
+		}
+		
+		// Store the two files that were passed in as command line arguments.
 		file_1 = argsv[1];
 		file_2 = argsv[2];
 	}
 	
+	// Loop from 0 to 2 (inclusive)
+	while (i <= 2) {
+		// Try to create a new fork and catch any errors.
+		if ((new_pid = fork()) == -1) {
+			perror("forking error");
+		} else if(new_pid == 0) {
+			// If a new for is created, determine which function to run based on the current loop we are in.
+			switch (i) {
+				case AVERAGE: {
+					get_marks();
+				} break;
+				
+				case WORD_COUNT: {
+					call_wc(file_1);
+				} break;
+				
+				case EDIT: {
+					edit_file(file_2, "examine");
+				} break;
+			}
+		}
+		
+		// Store the new id in an array.
+		child_ids[i] = new_pid;
+		i++;
+	}
 	
-	get_marks();
-	call_wc(file_1);
-	edit_file(file_2, "examine");
-	
+	// Call a parent function that waits for all the child processes to finish.
+	parent(child_ids, i);
+	printf("Parent done\r\n");
 	return 0;
 }
 
@@ -35,110 +77,37 @@ void parent(int ids[], int id_size) {
 	int i = 0;
 	int wait_rv;
 	int child_status;
-	int high_8, low_7, bit_7;
+	int high_8;
 	
+	// Loop from 0 to however many process ids were created.
 	while (i < id_size) {
+		// wait for the process to end and save it's return value.
 		wait_rv = waitpid(ids[i], &child_status, 0);
 		
-		high_8 = child_status >> 8;     /* 1111 1111 0000 0000 */
-		low_7  = child_status & 0x7F;   /* 0000 0000 0111 1111 */
-		bit_7  = child_status & 0x80;   /* 0000 0000 1000 0000 */
-		
+		// Get the high 8 bits which will be the exit status of the process.
+		high_8 = child_status >> 8;
+		// Determine which process we are outputting for based on the current iterator value.
 		switch (i) {
 			case AVERAGE: {
-				
+				printf("Average Marks: ");
 			} break;
 			
 			case WORD_COUNT: {
-				
+				printf("Word Count: ");
 			} break;
 			
 			case EDIT: {
-				
+				printf("Search and Replace: ");
 			} break;
 		}
+		
+		// Output which child is done, and it's exit status
+		printf("Child %d done. The exit status is %d.\r\n", ids[i], high_8);
 		
 		i++;
 	}
 }
 
-void edit_file(char *filename, char *needle) {
-	char *replace = "check";
-	
-	FILE *r_fp = fopen(filename, "r"); // Read file pointer
-	
-	// Determine the size of buffer needed.
-	fseek(r_fp, 0, SEEK_END);
-	size_t buf_size = ftell(r_fp);
-	// Go back to beginning of the file.
-	rewind(r_fp);
-	
-	// allocate the buffer.
-	char *buf = NULL;
-	buf = malloc((buf_size + 1) * sizeof(*buf));
-	
-	// read the file into the buffer.
-	fread(buf, buf_size, 1, r_fp);
-	fclose(r_fp); // Close the read file pointer
-	
-	// Terminate the buffer.
-	buf[buf_size] = '\0';
-	
-	// Set up file to write to it. 'w' mode will clear the contents of the file, meaning we will have an empty file that we will be writing to.
-	FILE *w_fp = fopen(filename, "w");
-	
-	// Write update line to file initially. 
-	char *update_line = "This is the updated version.";
-	fprintf(w_fp, "%s", update_line);
-	char *word;
-	
-	word = strtok(buf, " ");
-	// Iterate over each word in the buffer.
-	while(word != NULL) {
-		// Compare current word to needle.
-		if (strcmp(word, needle) == 0) {
-			// Replace needle with the desired word and write it to the file.
-			fprintf(w_fp, "%s ", replace);
-		} else {
-			// Write the current word to the file.
-			fprintf(w_fp, "%s ", word);
-		}
-		word = strtok(NULL, " ");
-	}
-	
-	if (fclose(w_fp)) { // Close the write file pointer;
-		exit(200);
-	} else {
-		exit(0);
-	}
-}
 
 
-void call_wc(char *filename) {
-	char	*arglist[3];
-	
-	arglist[0] = "wc";
-	arglist[1] = filename;
-	arglist[2] = 0 ;
-	
-	execvp("wc" , arglist);
-}
 
-void get_marks() {
-	float sum = 0.0;
-	int i = 0;
-	printf("Please enter each mark:\r\n");
-	while(i < 10) {
-		float mark;
-		scanf("%e", &mark);
-		sum = sum + mark;
-		i++;
-	}
-	
-	// Calculate the average;
-	float average = sum / (float)i;
-	
-	printf("The average mark is %.2f\r\n", average);
-	
-	exit(200);
-}
